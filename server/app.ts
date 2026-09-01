@@ -5,6 +5,7 @@ import Fastify, { type FastifyInstance } from 'fastify'
 import cors from '@fastify/cors'
 import multipart from '@fastify/multipart'
 import fastifyStatic from '@fastify/static'
+import { isLocalOrigin, registerGuard } from './api/guard.js'
 import { registerRoutes } from './api/routes.js'
 import { ensureLayout } from './storage/index.js'
 import { reconcileOnStartup } from './core/recorder.js'
@@ -24,9 +25,12 @@ export async function buildApp(opts: BuildOptions = {}): Promise<FastifyInstance
     bodyLimit: 32 * 1024 * 1024,
   })
 
-  // The daemon only ever binds to loopback; CORS exists so `vite dev` on :7330
-  // can talk to the API on :7331.
-  await app.register(cors, { origin: true })
+  // CORS is scoped to loopback so `vite dev` on :7330 can reach the API on
+  // :7331, without also handing every website the user visits an open door.
+  await app.register(cors, {
+    origin: (origin, cb) => cb(null, !origin || isLocalOrigin(origin)),
+  })
+  registerGuard(app)
   await app.register(multipart, { limits: { fileSize: 512 * 1024 * 1024 } })
 
   await registerRoutes(app)

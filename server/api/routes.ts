@@ -31,6 +31,14 @@ function normalisePath(input: string): string {
   return path.resolve(p)
 }
 
+const MAX_OUTPUT = 512 * 1024
+
+/** Output arrives from a local CLI, but it is still untrusted-length input. */
+function clip(text: string | undefined): string {
+  if (!text) return ''
+  return text.length <= MAX_OUTPUT ? text : `${text.slice(0, MAX_OUTPUT)}\n\u2026 truncated \u2026`
+}
+
 function httpError(reply: { code: (n: number) => { send: (b: unknown) => unknown } }, status: number, message: string) {
   return reply.code(status).send({ error: message })
 }
@@ -158,6 +166,38 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       return { event }
     },
   )
+
+  /**
+   * Files an already-executed command as an event. Used by
+   * `ghostframe exec -- <cmd>`, which runs the command itself so the user keeps
+   * live output and the real exit code.
+   */
+  app.post<{
+    Params: { id: string }
+    Body: { command?: string; stdout?: string; stderr?: string; exitCode?: number; durationMs?: number }
+  }>('/api/runs/:id/record-shell', async (req, reply) => {
+    const run = await loadRun(req.params.id)
+    if (!run) return httpError(reply, 404, `Unknown run: ${req.params.id}`)
+    const command = req.body?.command?.trim()
+    if (!command) return httpError(reply, 400, 'Missing command.')
+    const exitCode = typeof req.body?.exitCode === 'number' ? req.body.exitCode : 0
+
+    const event = {
+      id: newId('evt'),
+      runId: run.id,
+      type: isTestCommand(command) ? ('test' as const) : ('shell' as const),
+      timestamp: Date.now(),
+      label: `${command} \u2192 exit ${exitCode}`,
+      command,
+      stdout: clip(req.body?.stdout),
+      stderr: clip(req.body?.stderr),
+      exitCode,
+      durationMs: req.body?.durationMs,
+    }
+    await appendEvent(run.id, event)
+    bus.publish({ type: 'event', runId: run.id, event })
+    return { event }
+  })
 
   // --- Checkpoints ---------------------------------------------------------
   app.get<{ Params: { runId: string; id: string } }>(

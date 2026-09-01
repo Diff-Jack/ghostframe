@@ -18,8 +18,8 @@ It is **not** an agent, a chat UI, or an IDE. It answers one question:
 
 ## The loop
 
-| | |
-|---|---|
+| Step | What it does |
+| --- | --- |
 | **Record** | Watch a repo while an agent edits it |
 | **Inspect** | Every change as a timeline event with metadata |
 | **Diff** | Real `git diff`, including untracked files |
@@ -64,6 +64,22 @@ npm run dev
    re-run your agent down a different path.
 8. **Export .ghost / Import** moves a whole trace between machines.
 
+## Recording your agent's test runs
+
+Wrap any command so its result lands on the timeline automatically:
+
+```bash
+ghostframe exec -- npm test
+```
+
+It runs the command exactly as your shell would — same live output, same exit
+code — and files the result against whichever run is currently recording this
+repo. Known test runners become `test` events, which is what feeds first-bad-change
+detection. If the daemon is down or nothing is recording, the command still runs
+and still returns its own exit code; you just get a one-line notice.
+
+Point your agent's test command at it and you never have to click `Run` again.
+
 ## Safety model
 
 Restore rewrites files. GhostFrame treats losing your work as the one unacceptable
@@ -81,6 +97,11 @@ outcome, so:
   safety checkpoint, so they are recoverable.
 - Imported traces whose repository is not present on this machine are **read-only**.
 
+The API is loopback-only, and additionally rejects requests carrying a non-local
+`Origin` (a website you visit trying to drive it) or a non-local `Host` (DNS
+rebinding). It does **not** try to defend against another process running as you —
+that process can already do anything GhostFrame can.
+
 ## Where data lives
 
 Everything is on your machine, as plain files:
@@ -93,12 +114,19 @@ Everything is on your machine, as plain files:
     run_<id>/
       run.json
       events.json
+      objects/               # content-addressed bodies, one copy per run
       checkpoints/
         cp_<id>/
           metadata.json
           working.patch        # git diff --binary against the base commit
-          untracked/           # verbatim copies of untracked files
+          untracked/           # hard links into objects/
 ```
+
+Every checkpoint captures the whole untracked set, and across a long run most of
+those bytes repeat. Each `untracked/<path>` is a hard link into the run's object
+store, so identical content is stored once — twenty checkpoints of an unchanged
+file cost one copy. The layout still reads like plain files, in a `.ghost` archive
+too.
 
 Set `GHOSTFRAME_HOME` to relocate it. Other environment variables:
 `GHOSTFRAME_PORT` (7331), `GHOSTFRAME_HOST` (127.0.0.1), `GHOSTFRAME_DEBOUNCE_MS` (1000).

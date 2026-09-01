@@ -18,8 +18,8 @@ GhostFrame 在 Coding Agent（Claude Code、Codex、Cursor、Windsurf、自研 A
 
 ## 核心循环
 
-| | |
-|---|---|
+| 步骤 | 作用 |
+| --- | --- |
 | **Record** | Agent 改动仓库时持续记录 |
 | **Inspect** | 每次改动都是一条带元数据的 timeline 事件 |
 | **Diff** | 真实的 `git diff`，包含未追踪文件 |
@@ -63,6 +63,23 @@ npm run dev
 7. **Fork from here** 恢复某个 checkpoint 并从它开一条新 run，方便重新跑 Agent 走另一条路。
 8. **Export .ghost / Import** 在不同机器之间搬运完整 trace。
 
+## 自动记录 Agent 的测试结果
+
+用它包一层，命令结果就会自动出现在 timeline 上：
+
+```bash
+ghostframe exec -- npm test
+```
+
+它会像普通 shell 一样执行命令 —— 输出实时透传、exit code 原样返回 —— 同时把结果记到
+当前正在录制这个仓库的 run 上。识别到常见测试命令时会记成 `test` 事件，
+这正是 first-bad-change 判断所依赖的数据。
+
+daemon 没启动或当前没有在录制时，命令照常执行、exit code 照常返回，
+只会多一行提示。
+
+把 Agent 的测试命令指向它，就再也不用手动点 `Run` 了。
+
 ## 安全模型
 
 Restore 会真的改写文件。GhostFrame 认为「弄丢用户的工作」是唯一不可接受的结果，所以：
@@ -78,6 +95,10 @@ Restore 会真的改写文件。GhostFrame 认为「弄丢用户的工作」是�
   可以找回。
 - 导入的 trace 如果在本机找不到对应仓库，则为**只读**，不允许 restore。
 
+API 只监听 loopback，并且会额外拒绝携带非本地 `Origin` 的请求（你访问的某个网站试图
+驱动它）和非本地 `Host` 的请求（DNS rebinding）。它**不**试图防御以你的身份运行的其他
+本机进程 —— 那个进程本来就能做 GhostFrame 能做的一切。
+
 ## 数据存放位置
 
 全部在本机，都是普通文件：
@@ -90,12 +111,18 @@ Restore 会真的改写文件。GhostFrame 认为「弄丢用户的工作」是�
     run_<id>/
       run.json
       events.json
+      objects/               # 内容寻址存储，每个 run 内同内容只存一份
       checkpoints/
         cp_<id>/
           metadata.json
           working.patch        # 相对 base commit 的 git diff --binary
-          untracked/           # 未追踪文件的原样副本
+          untracked/           # 指向 objects/ 的硬链接
 ```
+
+每个 checkpoint 都会抓取全部未追踪文件，而一条长 run 里这些字节大部分是重复的。
+每个 `untracked/<path>` 都是指向该 run object store 的硬链接，所以相同内容只存一份 ——
+二十个 checkpoint 里没变过的文件只占一份空间。对外看起来仍然就是普通文件，
+`.ghost` 归档里也一样。
 
 用 `GHOSTFRAME_HOME` 可以改位置。其他环境变量：
 `GHOSTFRAME_PORT`（7331）、`GHOSTFRAME_HOST`（127.0.0.1）、`GHOSTFRAME_DEBOUNCE_MS`（1000）。

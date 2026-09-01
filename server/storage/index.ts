@@ -34,6 +34,23 @@ export function checkpointDir(runId: string, checkpointId: string): string {
   return path.join(checkpointsDir(runId), checkpointId)
 }
 
+/**
+ * Content-addressed store for untracked file bodies, one per run.
+ *
+ * Every checkpoint copies the whole untracked set, and across a long run most
+ * of those bytes are identical. Each checkpoint's `untracked/<path>` is a hard
+ * link into this directory, so identical content is stored once. The layout on
+ * disk and inside a .ghost archive is unchanged — a hard link reads like any
+ * other file.
+ */
+export function objectsDir(runId: string): string {
+  return path.join(runDir(runId), 'objects')
+}
+
+export function objectPath(runId: string, sha: string): string {
+  return path.join(objectsDir(runId), sha.slice(0, 2), sha)
+}
+
 export async function ensureLayout(): Promise<void> {
   await fs.mkdir(runsDir(), { recursive: true })
   await fs.mkdir(configDir(), { recursive: true })

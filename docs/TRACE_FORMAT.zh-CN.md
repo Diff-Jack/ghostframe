@@ -122,7 +122,7 @@ interface CheckpointMetadata {
   timestamp: number
   gitHead: string       // patch 所基于的 commit；仓库没有 commit 时为 ''
   branch: string
-  untrackedFiles: { path: string; contentPath: string; mode?: number }[]
+  untrackedFiles: { path: string; contentPath: string; mode?: number; sha256?: string }[]
   safety?: boolean      // restore 前自动生成的备份
   label?: string
 }
@@ -147,6 +147,8 @@ git diff --binary --no-color --no-ext-diff <gitHead>
 抓取时刻所有未追踪且未被忽略的文件的原样副本
 （来自 `git ls-files --others --exclude-standard`），按相对仓库根目录的路径存放。
 metadata 里的 `contentPath` 相对于 checkpoint 目录，且始终使用 `/` 分隔符。
+`sha256` 是内容哈希（v1 起可选字段）：本地磁盘上它让同一个 run 内相同内容只存一份，
+读取方可以用它做完整性校验，也可以直接忽略。
 
 未追踪文件超过 2000 个或总量超过 64MB 时，抓取会直接报错而不是悄悄截断 ——
 正确做法是把构建产物加进 .gitignore。

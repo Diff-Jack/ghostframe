@@ -123,7 +123,7 @@ interface CheckpointMetadata {
   timestamp: number
   gitHead: string       // base commit the patch applies to; '' if the repo has no commits
   branch: string
-  untrackedFiles: { path: string; contentPath: string; mode?: number }[]
+  untrackedFiles: { path: string; contentPath: string; mode?: number; sha256?: string }[]
   safety?: boolean      // written automatically before a restore
   label?: string
 }
@@ -149,6 +149,9 @@ has no commits yet.
 Verbatim copies of every untracked, non-ignored file at capture time (`git ls-files
 --others --exclude-standard`), stored under their repo-relative path. `contentPath` in
 the metadata is relative to the checkpoint directory and always uses `/` separators.
+`sha256` is the content hash (optional, added within v1): on local disk it lets one
+run store identical bodies once, and readers may use it to verify integrity or
+ignore it entirely.
 
 Capture refuses to proceed beyond 2000 untracked files or 64 MB rather than silently
 truncating — the fix is to gitignore build output.

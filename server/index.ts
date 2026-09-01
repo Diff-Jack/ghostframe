@@ -1,4 +1,5 @@
 import { buildApp } from './app.js'
+import { runCli } from './cli/index.js'
 import { stopAll } from './core/recorder.js'
 import { ghostHome } from './storage/index.js'
 
@@ -7,6 +8,11 @@ const HOST = process.env.GHOSTFRAME_HOST ?? '127.0.0.1'
 const serveStatic = process.env.GHOSTFRAME_SERVE_STATIC !== '0'
 
 async function main(): Promise<void> {
+  const exitCode = await runCli(process.argv.slice(2))
+  if (exitCode !== null) {
+    process.exit(exitCode)
+  }
+
   const app = await buildApp({ serveStatic })
   await app.listen({ port: PORT, host: HOST })
 

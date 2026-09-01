@@ -78,6 +78,8 @@ export interface UntrackedEntry {
   /** Path of the stored copy, relative to the checkpoint directory. */
   contentPath: string
   mode?: number
+  /** sha256 of the content. Lets identical bodies be stored once per run. */
+  sha256?: string
 }
 
 export interface Checkpoint {

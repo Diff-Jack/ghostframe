@@ -1,9 +1,11 @@
 import fs from 'node:fs/promises'
 import fsSync from 'node:fs'
 import path from 'node:path'
+import { createHash } from 'node:crypto'
+import { pipeline } from 'node:stream/promises'
 import type { Checkpoint, RestoreResult, UntrackedEntry } from '../../shared/types.js'
 import * as G from '../git/index.js'
-import { checkpointDir, newId, saveCheckpoint } from '../storage/index.js'
+import { checkpointDir, newId, objectPath, saveCheckpoint } from '../storage/index.js'
 
 export class RestoreAbortedError extends Error {
   constructor(message: string) {
@@ -72,8 +74,13 @@ export async function captureCheckpoint(opts: CaptureOptions): Promise<Checkpoin
     }
     const dest = path.join(untrackedRoot, rel)
     await fs.mkdir(path.dirname(dest), { recursive: true })
-    await fs.copyFile(src, dest)
-    entries.push({ path: rel, contentPath: path.posix.join('untracked', toPosix(rel)), mode: stat.mode & 0o777 })
+    const sha = await storeObject(opts.runId, src, dest)
+    entries.push({
+      path: rel,
+      contentPath: path.posix.join('untracked', toPosix(rel)),
+      mode: stat.mode & 0o777,
+      sha256: sha,
+    })
   }
 
   const checkpoint: Checkpoint = {
@@ -244,6 +251,44 @@ async function applyCheckpointToWorktree(cp: Checkpoint, repoPath: string): Prom
   }
 
   return { restoredTracked, restoredUntracked, removedUntracked }
+}
+
+/**
+ * Puts `src` into the run's object store and hard-links it to `dest`.
+ *
+ * Returns the content hash. Falls back to a plain copy when linking is not
+ * possible (different filesystem, link-count limit) — correctness never
+ * depends on the optimisation succeeding.
+ */
+async function storeObject(runId: string, src: string, dest: string): Promise<string> {
+  const sha = await hashFile(src)
+  const object = objectPath(runId, sha)
+
+  if (!fsSync.existsSync(object)) {
+    await fs.mkdir(path.dirname(object), { recursive: true })
+    // Copy to a temp name first so a crash cannot leave a truncated object
+    // that later checkpoints would happily link to.
+    const tmp = `${object}.${process.pid}.tmp`
+    await fs.copyFile(src, tmp)
+    try {
+      await fs.rename(tmp, object)
+    } catch {
+      await fs.rm(tmp, { force: true })
+    }
+  }
+
+  try {
+    await fs.link(object, dest)
+  } catch {
+    await fs.copyFile(src, dest)
+  }
+  return sha
+}
+
+async function hashFile(file: string): Promise<string> {
+  const hash = createHash('sha256')
+  await pipeline(fsSync.createReadStream(file), hash)
+  return hash.digest('hex')
 }
 
 async function removeIfExists(file: string): Promise<void> {
