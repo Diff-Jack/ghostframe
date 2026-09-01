@@ -7,7 +7,7 @@ import type { Run, RunDetail, StreamMessage } from '../../shared/types.js'
 import * as G from '../git/index.js'
 import { RestoreAbortedError, restoreCheckpoint } from '../checkpoint/index.js'
 import { analyseRegression } from '../core/analysis.js'
-import { bus } from '../core/bus.js'
+import { bus, trackStream } from '../core/bus.js'
 import * as recorder from '../core/recorder.js'
 import { isTestCommand, runCommand } from '../core/shell.js'
 import { exportRun, importTrace, TraceError } from '../trace/index.js'
@@ -335,10 +335,12 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
 
     const unsubscribe = bus.subscribe(send)
     const keepAlive = setInterval(() => reply.raw.write(': ping\n\n'), 25_000)
+    const untrack = trackStream(reply.raw)
 
     req.raw.on('close', () => {
       clearInterval(keepAlive)
       unsubscribe()
+      untrack()
     })
   })
 

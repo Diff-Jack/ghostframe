@@ -23,6 +23,8 @@ export async function buildApp(opts: BuildOptions = {}): Promise<FastifyInstance
   const app = Fastify({
     logger: opts.logger ? { transport: undefined } : false,
     bodyLimit: 32 * 1024 * 1024,
+    // Without this a lingering keep-alive socket also stalls shutdown.
+    forceCloseConnections: true,
   })
 
   // CORS is scoped to loopback so `vite dev` on :7330 can reach the API on
