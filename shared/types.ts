@@ -30,6 +30,10 @@ export interface Run {
 
 export type EventType =
   | 'run_start'
+  /** A human instruction handed to a coding agent. Anchors a turn. */
+  | 'prompt'
+  /** A tool the coding agent invoked (Edit, Read, Bash, …). */
+  | 'agent_tool'
   | 'file_change'
   | 'checkpoint'
   | 'shell'
@@ -70,6 +74,26 @@ export interface RunEvent {
   restoredFromCheckpointId?: string
   /** restore events: the safety backup taken before the rollback. */
   safetyCheckpointId?: string
+
+  // --- coding-agent attribution ------------------------------------------
+  /** prompt events: what the human actually asked for. */
+  prompt?: string
+  /** agent_tool events: the tool name as the agent reported it. */
+  toolName?: string
+  /** agent_tool events: a one-line rendering of the tool's target. */
+  toolSummary?: string
+  /**
+   * Groups every event caused by one instruction. Set on the prompt event and
+   * on everything that follows it until the next prompt.
+   */
+  turnId?: string
+  /** Which agent produced this, e.g. `claude-code`. */
+  agent?: string
+  agentSessionId?: string
+  /** Touched paths that look like credentials. */
+  sensitivePaths?: string[]
+  /** Remote hosts that appeared in a command the agent ran. */
+  hosts?: string[]
 }
 
 export interface UntrackedEntry {

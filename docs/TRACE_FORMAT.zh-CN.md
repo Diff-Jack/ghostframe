@@ -71,6 +71,8 @@ interface Run {
 ```ts
 type EventType =
   | 'run_start'
+  | 'prompt'      // a human instruction handed to a coding agent
+  | 'agent_tool'  // a tool the agent invoked
   | 'file_change'
   | 'checkpoint'
   | 'shell'
@@ -103,7 +105,24 @@ interface RunEvent {
   message?: string
   restoredFromCheckpointId?: string
   safetyCheckpointId?: string
+
+  // Coding-agent 归属信息
+  prompt?: string           // prompt 事件:人给出的指令原文
+  toolName?: string         // agent_tool 事件:工具名
+  toolSummary?: string      // agent_tool 事件:目标的一行摘要
+  turnId?: string           // 把一条指令引发的所有事件归成一组
+  agent?: string            // 例如 'claude-code'
+  agentSessionId?: string
+  sensitivePaths?: string[] // 命中的疑似凭据路径
+  hosts?: string[]          // 命令里出现过的远程域名
 }
+
+一条 `prompt` 事件开启一个新的 turn;在下一条 prompt 到来之前,所有 `agent_tool`、
+`file_change`、`checkpoint` 事件都会带上同一个 `turnId`。**这个归属关系正是
+"哪句话改坏了代码"能够成立的原因。**
+
+`sensitivePaths` 和 `hosts` 是启发式判断,给的是线索不是结论:
+`hosts` 来自命令文本,不是流量拦截,一定会漏。
 ```
 
 一轮稳定下来的改动会产生一条 `file_change` 事件，紧跟着一条指向同一个 checkpoint 的

@@ -1,4 +1,7 @@
+import { doctorCommand } from './doctor.js'
 import { execCommand } from './exec.js'
+import { hookCommand } from './hook.js'
+import { installHooksCommand } from './installHooks.js'
 
 const HELP = `GhostFrame — time-travel debugging for coding agents
 
@@ -6,6 +9,9 @@ Usage:
   ghostframe                     Start the local daemon and UI
   ghostframe serve               Same as above
   ghostframe exec -- <command>   Run a command and record it on the active run
+  ghostframe install-hooks [dir] Wire GhostFrame into Claude Code for a repo
+  ghostframe hook                Internal: called by Claude Code hooks (stdin)
+  ghostframe doctor [dir]        Diagnose why hooks or recording are not working
   ghostframe --help              Show this message
 
 Environment:
@@ -32,6 +38,9 @@ export async function runCli(argv: string[]): Promise<number | null> {
   }
 
   if (command === 'exec') return execCommand(rest)
+  if (command === 'hook') return hookCommand(rest)
+  if (command === 'install-hooks') return installHooksCommand(rest)
+  if (command === 'doctor') return doctorCommand(rest)
 
   process.stderr.write(`Unknown command: ${command}\n\n${HELP}`)
   return 2

@@ -4,6 +4,8 @@ import { useStore } from '../store.js'
 
 const ICONS: Record<RunEvent['type'], string> = {
   run_start: '▶',
+  prompt: '💬',
+  agent_tool: '⚙',
   file_change: '✎',
   checkpoint: '◆',
   shell: '$',
@@ -40,6 +42,10 @@ export function Timeline() {
   }
 
   const suspects = new Set(analysis?.suspects ?? [])
+  // A turn is only worth drawing as a group once its prompt has arrived.
+  const turnsWithPrompt = new Set(
+    events.filter((e) => e.type === 'prompt' && e.turnId).map((e) => e.turnId!),
+  )
 
   return (
     <section className="panel timeline-panel">
@@ -56,6 +62,7 @@ export function Timeline() {
 
       <ol className="timeline">
         {events.map((event) => {
+          const inTurn = !!event.turnId && turnsWithPrompt.has(event.turnId) && event.type !== 'prompt'
           const flagged = event.checkpointId ? suspects.has(event.checkpointId) : false
           const bad = analysis?.firstBadCheckpointId && event.checkpointId === analysis.firstBadCheckpointId
           return (
@@ -64,7 +71,7 @@ export function Timeline() {
                 type="button"
                 className={`tl-item tl-${event.type} ${selectedEventId === event.id ? 'is-selected' : ''} ${
                   flagged ? 'is-suspect' : ''
-                } ${bad ? 'is-bad' : ''}`}
+                } ${bad ? 'is-bad' : ''} ${inTurn ? 'is-in-turn' : ''}`}
                 onClick={() => selectEvent(event.id)}
               >
                 <span className="tl-time">{offset(detail.run.startedAt, event.timestamp)}</span>
@@ -84,6 +91,16 @@ export function Timeline() {
                   {typeof event.exitCode === 'number' && (
                     <span className={`tl-exit ${event.exitCode === 0 ? 'ok' : 'fail'}`}>
                       exit {event.exitCode}
+                    </span>
+                  )}
+                  {event.sensitivePaths && event.sensitivePaths.length > 0 && (
+                    <span className="tl-flag" title={event.sensitivePaths.join(', ')}>
+                      ⚠ credentials: {event.sensitivePaths.join(', ')}
+                    </span>
+                  )}
+                  {event.hosts && event.hosts.length > 0 && (
+                    <span className="tl-flag" title={event.hosts.join(', ')}>
+                      ⚠ network: {event.hosts.join(', ')}
                     </span>
                   )}
                 </span>

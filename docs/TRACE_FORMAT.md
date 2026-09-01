@@ -72,6 +72,8 @@ An array of events, ordered by `timestamp`.
 ```ts
 type EventType =
   | 'run_start'
+  | 'prompt'      // a human instruction handed to a coding agent
+  | 'agent_tool'  // a tool the agent invoked
   | 'file_change'
   | 'checkpoint'
   | 'shell'
@@ -104,7 +106,25 @@ interface RunEvent {
   message?: string
   restoredFromCheckpointId?: string
   safetyCheckpointId?: string
+
+  // Coding-agent attribution
+  prompt?: string           // prompt events: the instruction as given
+  toolName?: string         // agent_tool events: the tool's name
+  toolSummary?: string      // agent_tool events: one-line target
+  turnId?: string           // groups everything one instruction caused
+  agent?: string            // e.g. 'claude-code'
+  agentSessionId?: string
+  sensitivePaths?: string[] // touched paths that look like credentials
+  hosts?: string[]          // remote hosts seen in a command
 }
+
+A `prompt` event opens a turn. Every `agent_tool`, `file_change` and
+`checkpoint` event carries that same `turnId` until the next prompt arrives.
+**That attribution is what makes "which instruction broke the build" answerable
+at all.**
+
+`sensitivePaths` and `hosts` are heuristics — leads, not verdicts. `hosts` is
+read from command text rather than intercepted traffic, so it will miss things.
 ```
 
 A settled burst of edits produces a `file_change` event immediately followed by a

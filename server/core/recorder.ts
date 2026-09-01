@@ -13,6 +13,7 @@ import {
 } from '../storage/index.js'
 import { RepoWatcher } from '../watcher/index.js'
 import { bus } from './bus.js'
+import { extractHosts, flagSensitive } from './sensitive.js'
 
 interface Session {
   run: Run
@@ -21,6 +22,13 @@ interface Session {
   suppressed: boolean
   /** Serialises change handling so two bursts cannot interleave git calls. */
   queue: Promise<void>
+  /**
+   * The instruction currently being executed. Everything recorded until the
+   * next prompt is attributed to it, which is what turns a flat list of file
+   * changes into "this sentence caused these edits".
+   */
+  turnId?: string
+  turnPrompt?: string
 }
 
 const sessions = new Map<string, Session>()
@@ -171,12 +179,15 @@ async function handleChanges(runId: string, changes: FileChange[]): Promise<void
     checkpointId: checkpoint.id,
     gitHead: head,
     branch,
+    turnId: session.turnId,
+    sensitivePaths: flagSensitive(files),
   })
   await emitCheckpointEvent(
     runId,
     checkpoint.id,
     Math.max(checkpoint.timestamp, timestamp + 1),
     `Checkpoint ${checkpoint.id}`,
+    session.turnId,
   )
 }
 
@@ -185,6 +196,7 @@ async function emitCheckpointEvent(
   checkpointId: string,
   timestamp: number,
   label: string,
+  turnId?: string,
 ): Promise<void> {
   await emit(runId, {
     id: newId('evt'),
@@ -193,6 +205,7 @@ async function emitCheckpointEvent(
     timestamp,
     label,
     checkpointId,
+    turnId,
   })
 }
 
@@ -277,6 +290,81 @@ export async function recordRestoreEvent(
   }
   await emit(runId, event)
   return event
+}
+
+export interface AgentEventInput {
+  repoPath: string
+  agent?: string
+  sessionId?: string
+  kind: 'prompt' | 'tool'
+  prompt?: string
+  toolName?: string
+  toolSummary?: string
+  /** Repo-relative or absolute paths the tool touched. */
+  paths?: string[]
+  command?: string
+  exitCode?: number
+}
+
+/**
+ * Files an event reported by a coding agent's hook.
+ *
+ * A `prompt` opens a new turn; every subsequent tool call and file change is
+ * tagged with that turn until the next prompt arrives. That attribution is the
+ * whole point — it is what lets the timeline say *which instruction* broke the
+ * build, rather than merely which minute.
+ */
+export async function recordAgentEvent(input: AgentEventInput): Promise<RunEvent | null> {
+  const session = [...sessions.values()].find((s) => s.run.repoPath === input.repoPath)
+  if (!session) return null
+  const runId = session.run.id
+  const agent = input.agent ?? 'agent'
+
+  if (input.kind === 'prompt') {
+    const turnId = newId('turn')
+    session.turnId = turnId
+    session.turnPrompt = input.prompt
+    const event: RunEvent = {
+      id: newId('evt'),
+      runId,
+      type: 'prompt',
+      timestamp: Date.now(),
+      label: oneLine(input.prompt ?? '(empty prompt)'),
+      prompt: input.prompt,
+      turnId,
+      agent,
+      agentSessionId: input.sessionId,
+    }
+    await emit(runId, event)
+    return event
+  }
+
+  const sensitivePaths = flagSensitive(input.paths ?? [])
+  const hosts = extractHosts(input.command)
+  const event: RunEvent = {
+    id: newId('evt'),
+    runId,
+    type: 'agent_tool',
+    timestamp: Date.now(),
+    label: `${input.toolName ?? 'tool'}${input.toolSummary ? `  ${oneLine(input.toolSummary)}` : ''}`,
+    toolName: input.toolName,
+    toolSummary: input.toolSummary,
+    files: input.paths?.length ? input.paths : undefined,
+    command: input.command,
+    exitCode: input.exitCode,
+    turnId: session.turnId,
+    agent,
+    agentSessionId: input.sessionId,
+    sensitivePaths: sensitivePaths.length ? sensitivePaths : undefined,
+    hosts: hosts.length ? hosts : undefined,
+  }
+  await emit(runId, event)
+  return event
+}
+
+function oneLine(text: string, max = 120): string {
+  const collapsed = text.replace(/\s+/g, ' ').trim()
+  return collapsed.length <= max ? collapsed : `${collapsed.slice(0, max - 1)}…`
 }
 
 /** Marks runs that were left "recording" by a crashed or killed daemon. */

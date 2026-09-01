@@ -111,6 +111,40 @@ function DetailTab({ event, checkpoint }: { event: RunEvent; checkpoint: Checkpo
             }
           />
         )}
+        {event.prompt && (
+          <Row label="Prompt" value={<pre className="prompt-text">{event.prompt}</pre>} />
+        )}
+        {event.agent && <Row label="Agent" value={event.agent} />}
+        {event.toolName && <Row label="Tool" value={event.toolName} mono />}
+        {event.turnId && <Row label="Turn" value={event.turnId} mono />}
+        {event.sensitivePaths && event.sensitivePaths.length > 0 && (
+          <Row
+            label="Credentials touched"
+            value={
+              <ul className="file-list warn">
+                {event.sensitivePaths.map((p) => (
+                  <li key={p} className="mono">
+                    {p}
+                  </li>
+                ))}
+              </ul>
+            }
+          />
+        )}
+        {event.hosts && event.hosts.length > 0 && (
+          <Row
+            label="Remote hosts"
+            value={
+              <ul className="file-list warn">
+                {event.hosts.map((h) => (
+                  <li key={h} className="mono">
+                    {h}
+                  </li>
+                ))}
+              </ul>
+            }
+          />
+        )}
         {event.checkpointId && <Row label="Checkpoint ID" value={event.checkpointId} mono />}
         {event.restoredFromCheckpointId && (
           <Row label="Restored from" value={event.restoredFromCheckpointId} mono />

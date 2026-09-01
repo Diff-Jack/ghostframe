@@ -26,6 +26,7 @@ GhostFrame 在 Coding Agent（Claude Code、Codex、Cursor、Windsurf、自研 A
 | **Checkpoint** | 每次稳定变更后生成可恢复快照 |
 | **Restore** | 安全地把工作区恢复回去 |
 | **Fork** | 从任意历史 checkpoint 开一条新的 run |
+| **Attribute** | 把每次改动归到造成它的那句 prompt 下面 |
 
 ## 快速开始
 
@@ -62,6 +63,49 @@ npm run dev
 6. **Restore checkpoint** 把工作区恢复到那一刻。
 7. **Fork from here** 恢复某个 checkpoint 并从它开一条新 run，方便重新跑 Agent 走另一条路。
 8. **Export .ghost / Import** 在不同机器之间搬运完整 trace。
+
+## Prompt 级历史(Claude Code)
+
+**这是 git 做不到的部分。**
+
+```bash
+ghostframe install-hooks     # 在你的仓库里执行一次
+```
+
+之后 Claude Code 会把每一条指令、每一次工具调用报给 GhostFrame,
+timeline 就不再是一串扁平的文件变化了:
+
+```
+▶ "重构结算逻辑,顺便把金额取整"
+  │ ⚙ Read   src/cart.js
+  │ ⚙ Edit   src/cart.js
+  │ ✎ Modified src/cart.js
+  │ ◆ Checkpoint cp_088aea7f
+  │ ⏱ npm test → exit 0
+
+▶ "顺手优化一下折扣的边界判断"                              ← 就是这句
+  │ ⚙ Edit   src/cart.js
+  │ ⚙ Read   .env                    ⚠ 凭据: .env
+  │ ⚙ Bash   curl https://api.x.dev  ⚠ 外网: api.x.dev
+  │ ✎ Modified src/cart.js
+  │ ◆ Checkpoint cp_ee5e62fa
+  │ ⏱ npm test → exit 1
+```
+
+你会拿到三样单看 diff 永远拿不到的东西:
+
+- **哪句话造成了哪次改动。** 不是"哪一分钟",是"哪条指令"。
+- **Agent 读了什么**,而不只是写了什么。像凭据的路径会被标出来;
+  仓库之外的文件会保留绝对路径,一眼就能看见。
+- **它连了哪里。** Agent 执行的命令里出现的域名会被列出来。
+  这是从命令文本里读的,不是拦截流量 —— 所以它的含义是"命令里出现过这些 URL",
+  **不等于**完整的出网记录。
+
+用 `ghostframe install-hooks --uninstall` 移除。它只往
+`.claude/settings.json` 里追加,已有的配置一律不动。
+
+如果没反应,跑 `ghostframe doctor` —— hook 被刻意设计成绝不出声(它绝不能成为
+你编码会话崩掉的原因),所以 `doctor` 是唯一会告诉你哪里不对的地方。
 
 ## 自动记录 Agent 的测试结果
 
@@ -149,6 +193,12 @@ npm run lint
 npm run typecheck
 npm test
 npm run build
+```
+
+想让 `ghostframe` 进 PATH(这样即使挪动目录 hook 也不会失效):
+
+```bash
+npm link
 ```
 
 测试全部在临时目录里的一次性 git 仓库上运行，绝不会拿真实工程做破坏性恢复测试。

@@ -227,6 +227,22 @@ input:disabled { opacity: 0.5; }
 .tl-time { font-family: var(--mono); font-size: 10.5px; color: var(--fg-faint); padding-top: 1px; }
 .tl-icon { font-size: 11px; color: var(--fg-dim); padding-top: 1px; }
 .tl-checkpoint .tl-icon { color: var(--accent); }
+
+/* A prompt anchors a turn; everything it caused is indented beneath it. */
+.tl-prompt { background: var(--bg-2); margin-top: 8px; }
+.tl-prompt .tl-label { font-weight: 600; color: #cfe4ff; }
+.tl-prompt.is-selected { background: var(--bg-3); }
+.tl-item.is-in-turn { margin-left: 14px; box-shadow: inset 1px 0 0 var(--line); }
+.tl-item.is-in-turn.is-suspect { box-shadow: inset 2px 0 0 var(--warn); }
+.tl-item.is-in-turn.is-bad { box-shadow: inset 2px 0 0 var(--danger); }
+.tl-agent_tool .tl-icon { color: var(--fg-faint); }
+.tl-agent_tool .tl-label { color: var(--fg-dim); }
+.tl-flag {
+  font-size: 10.5px;
+  font-family: var(--mono);
+  color: var(--warn);
+  overflow-wrap: anywhere;
+}
 .tl-error .tl-icon, .tl-error .tl-label { color: var(--danger); }
 .tl-restore .tl-icon { color: var(--warn); }
 .tl-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
@@ -257,6 +273,12 @@ input:disabled { opacity: 0.5; }
 .kv dt { color: var(--fg-dim); font-size: 11.5px; }
 .kv dd { margin: 0; overflow-wrap: anywhere; }
 .file-list { margin: 0; padding-left: 16px; display: grid; gap: 2px; }
+.file-list.warn li { color: var(--warn); }
+.prompt-text {
+  margin: 0; background: var(--bg-1); border: 1px solid var(--line);
+  border-radius: var(--radius); padding: 10px 12px; white-space: pre-wrap;
+  font-size: 12px; line-height: 1.6; overflow-wrap: anywhere;
+}
 
 .output { margin-top: 20px; }
 .output h4, .cp-block h4 {

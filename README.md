@@ -26,6 +26,7 @@ It is **not** an agent, a chat UI, or an IDE. It answers one question:
 | **Checkpoint** | A restorable snapshot after every settled change |
 | **Restore** | Put the working tree back, safely |
 | **Fork** | Branch a new run from any past checkpoint |
+| **Attribute** | Group every edit under the prompt that caused it |
 
 ## Quick start
 
@@ -63,6 +64,51 @@ npm run dev
 7. **Fork from here** restores a checkpoint and starts a fresh run from it, so you can
    re-run your agent down a different path.
 8. **Export .ghost / Import** moves a whole trace between machines.
+
+## Prompt-level history (Claude Code)
+
+This is the part git cannot do.
+
+```bash
+ghostframe install-hooks     # in your repo, once
+```
+
+Claude Code then reports each instruction and each tool call, and the timeline
+stops being a flat list of file changes:
+
+```
+▶ "refactor the checkout logic and round the amounts"
+  │ ⚙ Read   src/cart.js
+  │ ⚙ Edit   src/cart.js
+  │ ✎ Modified src/cart.js
+  │ ◆ Checkpoint cp_088aea7f
+  │ ⏱ npm test → exit 0
+
+▶ "while you're there, tidy up the discount bounds check"     ← this one
+  │ ⚙ Edit   src/cart.js
+  │ ⚙ Read   .env                    ⚠ credentials: .env
+  │ ⚙ Bash   curl https://api.x.dev  ⚠ network: api.x.dev
+  │ ✎ Modified src/cart.js
+  │ ◆ Checkpoint cp_ee5e62fa
+  │ ⏱ npm test → exit 1
+```
+
+You get three things a diff alone never gives you:
+
+- **Which sentence caused which edit.** Not which minute — which instruction.
+- **What the agent read**, not just what it wrote. Credential-looking paths are
+  flagged, and a file outside the repository keeps its absolute path so it
+  stands out.
+- **Where it reached.** Hosts appearing in commands the agent ran are surfaced.
+  This reads the command text rather than intercepting traffic, so treat it as
+  "these URLs appeared", never as a complete record of egress.
+
+Remove the hooks with `ghostframe install-hooks --uninstall`. They only ever
+add to `.claude/settings.json`; anything already in there is left alone.
+
+If nothing shows up, run `ghostframe doctor` — hooks are deliberately silent so
+they can never break a coding session, which means `doctor` is the only place
+that will tell you what is wrong.
 
 ## Recording your agent's test runs
 
@@ -154,6 +200,12 @@ npm run lint
 npm run typecheck
 npm test
 npm run build
+```
+
+To get `ghostframe` on your PATH so hooks stay portable across moves:
+
+```bash
+npm link
 ```
 
 Tests run against throwaway git repositories in a temp directory — never against a real

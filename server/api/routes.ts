@@ -199,6 +199,54 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     return { event }
   })
 
+  /**
+   * Receives events from a coding agent's hooks (see `ghostframe hook`).
+   *
+   * Resolves the repository itself rather than making the hook know a run id —
+   * the hook fires in whatever directory the agent is working in and must stay
+   * as close to zero-configuration as possible.
+   */
+  app.post<{
+    Body: {
+      repoPath?: string
+      agent?: string
+      sessionId?: string
+      kind?: 'prompt' | 'tool'
+      prompt?: string
+      toolName?: string
+      toolSummary?: string
+      paths?: string[]
+      command?: string
+      exitCode?: number
+    }
+  }>('/api/agent/event', async (req, reply) => {
+    const raw = req.body?.repoPath
+    const kind = req.body?.kind
+    if (!raw) return httpError(reply, 400, 'Missing repoPath.')
+    if (kind !== 'prompt' && kind !== 'tool') return httpError(reply, 400, "kind must be 'prompt' or 'tool'.")
+
+    let repoPath = normalisePath(raw)
+    if (await G.isGitRepo(repoPath)) repoPath = await G.repoRoot(repoPath)
+
+    const event = await recorder.recordAgentEvent({
+      repoPath,
+      agent: req.body?.agent,
+      sessionId: req.body?.sessionId,
+      kind,
+      prompt: req.body?.prompt,
+      toolName: req.body?.toolName,
+      toolSummary: req.body?.toolSummary,
+      paths: req.body?.paths,
+      command: req.body?.command,
+      exitCode: req.body?.exitCode,
+    })
+
+    // Not recording this repo is a normal, quiet outcome — the hook must never
+    // turn a missing recording into a failure the agent notices.
+    if (!event) return { recorded: false, reason: 'No active recording for this repository.' }
+    return { recorded: true, event }
+  })
+
   // --- Checkpoints ---------------------------------------------------------
   app.get<{ Params: { runId: string; id: string } }>(
     '/api/runs/:runId/checkpoints/:id',
